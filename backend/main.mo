@@ -85,21 +85,56 @@ actor ShaderExamples {
             ";
         },
         {
-            name = "Water Ripples";
+            name = "Realistic Water";
             fragmentShader = "
                 precision highp float;
                 uniform float u_time;
                 uniform vec2 u_resolution;
                 uniform vec2 u_mouse;
-                
+                uniform int u_mouseClicks;
+
+                const int ITERATIONS = 5;
+                const float TAU = 6.28318530718;
+
+                float wave(vec2 position, float time, float speed, float frequency, float amplitude) {
+                    float x = dot(normalize(position), position) * frequency + time * speed;
+                    return sin(x) * amplitude;
+                }
+
                 void main() {
-                    vec2 st = gl_FragCoord.xy/u_resolution.xy;
-                    vec2 mouse = u_mouse/u_resolution.xy;
+                    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+                    vec2 position = uv * 2.0 - 1.0;
+                    position.x *= u_resolution.x / u_resolution.y;
+
+                    float time = u_time * 0.5;
                     
-                    float dist = distance(st, mouse);
-                    float ripple = sin(dist * 50.0 - u_time * 5.0) * 0.5 + 0.5;
+                    float height = 0.0;
+                    for(int i = 0; i < ITERATIONS; i++) {
+                        float amplitude = 0.01 / float(i + 1);
+                        float frequency = 20.0 * float(i * i + 1);
+                        float speed = 2.0 + float(i) * 0.5;
+                        height += wave(position, time, speed, frequency, amplitude);
+                    }
+
+                    // Add drops on mouse click
+                    vec2 mousePos = u_mouse / u_resolution.xy;
+                    mousePos = mousePos * 2.0 - 1.0;
+                    mousePos.x *= u_resolution.x / u_resolution.y;
+                    float dropStrength = 0.05 / (length(position - mousePos) + 0.1);
+                    dropStrength *= float(u_mouseClicks);
+                    height += dropStrength * sin(length(position - mousePos) * 80.0 - time * 10.0);
+
+                    vec3 normal = normalize(vec3(dFdx(height), dFdy(height), 1.0));
                     
-                    vec3 color = vec3(0.0, 0.5, 1.0) * ripple;
+                    vec3 lightDir = normalize(vec3(1.0, 1.0, -1.0));
+                    float diffuse = max(dot(normal, lightDir), 0.0);
+                    
+                    vec3 viewDir = normalize(vec3(0.0, 0.0, -1.0));
+                    vec3 reflectDir = reflect(-lightDir, normal);
+                    float specular = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                    
+                    vec3 waterColor = vec3(0.0, 0.3, 0.5);
+                    vec3 color = waterColor * (diffuse * 0.7 + 0.3) + vec3(1.0) * specular * 0.5;
                     
                     gl_FragColor = vec4(color, 1.0);
                 }
@@ -139,104 +174,57 @@ actor ShaderExamples {
             ";
         },
         {
-            name = "Animated Actors";
-            fragmentShader = "
-                precision highp float;
-                uniform float u_time;
-                uniform vec2 u_resolution;
-                
-                float circle(vec2 uv, vec2 pos, float size) {
-                    return step(length(uv - pos), size);
-                }
-                
-                void main() {
-                    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-                    uv = uv * 2.0 - 1.0;
-                    uv.x *= u_resolution.x / u_resolution.y;
-                    
-                    vec3 color = vec3(0.0);
-                    
-                    // Body
-                    vec2 bodyPos = vec2(sin(u_time) * 0.2, cos(u_time * 0.5) * 0.1);
-                    color += circle(uv, bodyPos, 0.2) * vec3(1.0, 0.5, 0.3);
-                    
-                    // Head
-                    vec2 headPos = bodyPos + vec2(0.0, 0.25);
-                    color += circle(uv, headPos, 0.1) * vec3(0.9, 0.7, 0.5);
-                    
-                    // Eyes
-                    float eyeSize = 0.02;
-                    vec2 leftEyePos = headPos + vec2(-0.05, 0.02);
-                    vec2 rightEyePos = headPos + vec2(0.05, 0.02);
-                    color += circle(uv, leftEyePos, eyeSize) * vec3(1.0);
-                    color += circle(uv, rightEyePos, eyeSize) * vec3(1.0);
-                    
-                    gl_FragColor = vec4(color, 1.0);
-                }
-            ";
-        },
-        {
-            name = "Starfield";
+            name = "Bird Agents";
             fragmentShader = "
                 precision highp float;
                 uniform float u_time;
                 uniform vec2 u_resolution;
                 uniform vec2 u_mouse;
-                
+
+                #define NUM_BIRDS 50
+                #define PI 3.14159265359
+
                 float random(vec2 st) {
                     return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
                 }
-                
+
+                vec2 rotate(vec2 v, float a) {
+                    float s = sin(a);
+                    float c = cos(a);
+                    mat2 m = mat2(c, -s, s, c);
+                    return m * v;
+                }
+
                 void main() {
                     vec2 st = gl_FragCoord.xy/u_resolution.xy;
-                    vec2 mouse = u_mouse/u_resolution.xy;
-                    
-                    vec3 color = vec3(0.0);
-                    
-                    float size = 0.002;
-                    float speed = 0.1;
-                    
-                    for (int i = 0; i < 100; i++) {
-                        float randX = random(vec2(float(i), 1.0));
-                        float randY = random(vec2(float(i), 2.0));
-                        vec2 pos = vec2(randX, randY) + mouse * 0.1;
-                        pos.y -= mod(u_time * speed * random(vec2(float(i), 3.0)), 1.0);
-                        pos = mod(pos, 1.0);
-                        
-                        float star = 1.0 - smoothstep(size, size * 2.0, length(st - pos));
-                        color += star * vec3(1.0);
+                    vec3 color = vec3(0.5, 0.8, 1.0); // Sky color
+
+                    vec2 mousePos = u_mouse/u_resolution.xy;
+
+                    for(int i = 0; i < NUM_BIRDS; i++) {
+                        float t = u_time * 0.5 + float(i);
+                        vec2 birdPos = vec2(
+                            mod(t * (0.1 + random(vec2(float(i), 0.0)) * 0.1), 1.0),
+                            mod(sin(t * 0.5) * 0.2 + 0.5 + random(vec2(0.0, float(i))) * 0.5, 1.0)
+                        );
+
+                        // Move towards mouse
+                        vec2 toMouse = mousePos - birdPos;
+                        birdPos += normalize(toMouse) * 0.001 * length(toMouse);
+
+                        vec2 birdDir = normalize(vec2(1.0, sin(t * 2.0) * 0.2));
+
+                        // Draw bird
+                        vec2 pos = st - birdPos;
+                        pos = rotate(pos, atan(birdDir.y, birdDir.x));
+                        float bird = max(
+                            smoothstep(0.01, 0.0, abs(pos.x) - 0.02 + sin(pos.x * 100.0) * 0.005),
+                            smoothstep(0.01, 0.0, length(pos - vec2(-0.02, 0.0)) - 0.005)
+                        );
+
+                        color = mix(color, vec3(0.0), bird);
                     }
-                    
-                    gl_FragColor = vec4(color, 1.0);
-                }
-            ";
-        },
-        {
-            name = "Lava Lamp";
-            fragmentShader = "
-                precision highp float;
-                uniform float u_time;
-                uniform vec2 u_resolution;
-                
-                float metaball(vec2 p, vec2 center, float radius) {
-                    return radius / length(p - center);
-                }
-                
-                void main() {
-                    vec2 st = gl_FragCoord.xy/u_resolution.xy;
-                    st = st * 2.0 - 1.0;
-                    st.x *= u_resolution.x / u_resolution.y;
-                    
-                    float m = 0.0;
-                    for (int i = 0; i < 5; i++) {
-                        float t = u_time * 0.5 + float(i) * 1.0;
-                        vec2 pos = vec2(sin(t) * 0.5, cos(t * 0.5) * 0.5);
-                        m += metaball(st, pos, 0.1);
-                    }
-                    
-                    vec3 color = vec3(1.0, 0.5, 0.0) * step(1.0, m);
-                    color += vec3(1.0, 0.8, 0.0) * step(1.2, m);
-                    
+
                     gl_FragColor = vec4(color, 1.0);
                 }
             ";
@@ -306,6 +294,11 @@ actor ShaderExamples {
                     for (int i = 0; i < 5; i++) {
                         float t = u_time * 0.5 + float(i) * 1.0;
                         vec2 pos = vec2(sin(t) * 0.3, cos(t * 0.5) * 0.6);
+                        
+                        // Add wall interaction
+                        float wallForce = 1.0 / max(abs(pos.x) - 0.35, 0.01);
+                        pos.x += sign(pos.x) * wallForce * 0.01;
+                        
                         m += metaball(st, pos, 0.1);
                     }
                     
@@ -320,6 +313,43 @@ actor ShaderExamples {
                     
                     // Add glow
                     color += vec3(1.0, 0.5, 0.2) * (1.0 - smoothstep(0.0, 0.1, lampShape)) * 0.5;
+                    
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            ";
+        },
+        {
+            name = "Interactive Lava Lamp (No Walls)";
+            fragmentShader = "
+                precision highp float;
+                uniform float u_time;
+                uniform vec2 u_resolution;
+                uniform vec2 u_mouse;
+                
+                float metaball(vec2 p, vec2 center, float radius) {
+                    return radius / length(p - center);
+                }
+                
+                void main() {
+                    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+                    st = st * 2.0 - 1.0;
+                    st.x *= u_resolution.x / u_resolution.y;
+                    
+                    float m = 0.0;
+                    vec2 mouse = u_mouse/u_resolution.xy * 2.0 - 1.0;
+                    mouse.x *= u_resolution.x / u_resolution.y;
+                    
+                    for (int i = 0; i < 5; i++) {
+                        float t = u_time * 0.5 + float(i) * 1.0;
+                        vec2 pos = vec2(sin(t) * 0.5, cos(t * 0.5) * 0.5);
+                        m += metaball(st, pos, 0.1);
+                    }
+                    
+                    // Add mouse interaction
+                    m += metaball(st, mouse, 0.2);
+                    
+                    vec3 color = vec3(1.0, 0.5, 0.0) * step(1.0, m);
+                    color += vec3(1.0, 0.8, 0.0) * step(1.2, m);
                     
                     gl_FragColor = vec4(color, 1.0);
                 }

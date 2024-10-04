@@ -6,8 +6,10 @@ let positionAttributeLocation;
 let resolutionUniformLocation;
 let timeUniformLocation;
 let mouseUniformLocation;
+let mouseClicksUniformLocation;
 let startTime;
 let mousePosition = { x: 0, y: 0 };
+let mouseClicks = 0;
 
 const vertexShaderSource = `
     attribute vec4 a_position;
@@ -54,6 +56,8 @@ async function init() {
     window.addEventListener('resize', resizeCanvas);
     canvas.addEventListener('mousemove', updateMousePosition);
     canvas.addEventListener('touchmove', updateTouchPosition);
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', handleClick);
     requestAnimationFrame(render);
 }
 
@@ -85,6 +89,13 @@ function updateTouchPosition(event) {
     mousePosition.y = canvas.height - (touch.clientY - rect.top);
 }
 
+function handleClick() {
+    mouseClicks++;
+    setTimeout(() => {
+        mouseClicks--;
+    }, 1000);
+}
+
 function setupShader(fragmentShaderSource) {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
@@ -95,6 +106,7 @@ function setupShader(fragmentShaderSource) {
     resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
     timeUniformLocation = gl.getUniformLocation(program, 'u_time');
     mouseUniformLocation = gl.getUniformLocation(program, 'u_mouse');
+    mouseClicksUniformLocation = gl.getUniformLocation(program, 'u_mouseClicks');
 
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -148,6 +160,7 @@ function render() {
     gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
     gl.uniform1f(timeUniformLocation, (Date.now() - startTime) / 1000);
     gl.uniform2f(mouseUniformLocation, mousePosition.x, mousePosition.y);
+    gl.uniform1i(mouseClicksUniformLocation, mouseClicks);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
