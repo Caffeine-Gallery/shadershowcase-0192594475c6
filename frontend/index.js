@@ -53,6 +53,7 @@ async function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     canvas.addEventListener('mousemove', updateMousePosition);
+    canvas.addEventListener('touchmove', updateTouchPosition);
     requestAnimationFrame(render);
 }
 
@@ -73,6 +74,15 @@ function updateMousePosition(event) {
     const rect = canvas.getBoundingClientRect();
     mousePosition.x = event.clientX - rect.left;
     mousePosition.y = canvas.height - (event.clientY - rect.top);
+}
+
+function updateTouchPosition(event) {
+    event.preventDefault();
+    const canvas = gl.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const touch = event.touches[0];
+    mousePosition.x = touch.clientX - rect.left;
+    mousePosition.y = canvas.height - (touch.clientY - rect.top);
 }
 
 function setupShader(fragmentShaderSource) {

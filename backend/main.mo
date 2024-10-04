@@ -1,3 +1,5 @@
+import Int "mo:base/Int";
+
 import Array "mo:base/Array";
 import Text "mo:base/Text";
 
@@ -234,6 +236,90 @@ actor ShaderExamples {
                     
                     vec3 color = vec3(1.0, 0.5, 0.0) * step(1.0, m);
                     color += vec3(1.0, 0.8, 0.0) * step(1.2, m);
+                    
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            ";
+        },
+        {
+            name = "Interactive Lava Lamp";
+            fragmentShader = "
+                precision highp float;
+                uniform float u_time;
+                uniform vec2 u_resolution;
+                uniform vec2 u_mouse;
+                
+                float metaball(vec2 p, vec2 center, float radius) {
+                    return radius / length(p - center);
+                }
+                
+                float sdEllipse(vec2 p, vec2 ab) {
+                    p = abs(p);
+                    if (p.x > p.y) {
+                        p = p.yx;
+                        ab = ab.yx;
+                    }
+                    float l = ab.y*ab.y - ab.x*ab.x;
+                    float m = ab.x*p.x/l;
+                    float m2 = m*m;
+                    float n = ab.y*p.y/l;
+                    float n2 = n*n;
+                    float c = (m2 + n2 - 1.0)/3.0;
+                    float c3 = c*c*c;
+                    float q = c3 + m2*n2*2.0;
+                    float d = c3 + m2*n2;
+                    float g = m + m*n2;
+                    float co;
+                    if (d < 0.0) {
+                        float h = acos(q/c3)/3.0;
+                        float s = cos(h);
+                        float t = sin(h)*sqrt(3.0);
+                        float rx = sqrt(-c*(s + t + 2.0) + m2);
+                        float ry = sqrt(-c*(s - t + 2.0) + m2);
+                        co = (ry + sign(l)*rx + abs(g)/(rx*ry) - m)/2.0;
+                    } else {
+                        float h = 2.0*m*n*sqrt(d);
+                        float s = sign(q + h)*pow(abs(q + h), 1.0/3.0);
+                        float u = sign(q - h)*pow(abs(q - h), 1.0/3.0);
+                        float rx = -s - u - c*4.0 + 2.0*m2;
+                        float ry = (s - u)*sqrt(3.0);
+                        float rm = sqrt(rx*rx + ry*ry);
+                        co = (ry/sqrt(rm-rx) + 2.0*g/rm - m)/2.0;
+                    }
+                    float si = sqrt(1.0 - co*co);
+                    vec2 r = vec2(ab.x*co, ab.y*si);
+                    return length(r - p) * sign(p.y - r.y);
+                }
+                
+                void main() {
+                    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+                    st = st * 2.0 - 1.0;
+                    st.x *= u_resolution.x / u_resolution.y;
+                    
+                    // Lamp shape
+                    float lampShape = sdEllipse(st, vec2(0.4, 0.8));
+                    
+                    float m = 0.0;
+                    vec2 mouse = u_mouse/u_resolution.xy * 2.0 - 1.0;
+                    mouse.x *= u_resolution.x / u_resolution.y;
+                    
+                    for (int i = 0; i < 5; i++) {
+                        float t = u_time * 0.5 + float(i) * 1.0;
+                        vec2 pos = vec2(sin(t) * 0.3, cos(t * 0.5) * 0.6);
+                        m += metaball(st, pos, 0.1);
+                    }
+                    
+                    // Add mouse interaction
+                    m += metaball(st, mouse, 0.2);
+                    
+                    vec3 color = vec3(1.0, 0.5, 0.0) * step(1.0, m);
+                    color += vec3(1.0, 0.8, 0.0) * step(1.2, m);
+                    
+                    // Apply lamp shape
+                    color *= 1.0 - smoothstep(0.0, 0.01, lampShape);
+                    
+                    // Add glow
+                    color += vec3(1.0, 0.5, 0.2) * (1.0 - smoothstep(0.0, 0.1, lampShape)) * 0.5;
                     
                     gl_FragColor = vec4(color, 1.0);
                 }
