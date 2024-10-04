@@ -5,7 +5,9 @@ let program;
 let positionAttributeLocation;
 let resolutionUniformLocation;
 let timeUniformLocation;
+let mouseUniformLocation;
 let startTime;
+let mousePosition = { x: 0, y: 0 };
 
 const vertexShaderSource = `
     attribute vec4 a_position;
@@ -48,7 +50,29 @@ async function init() {
     }
 
     startTime = Date.now();
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    canvas.addEventListener('mousemove', updateMousePosition);
     requestAnimationFrame(render);
+}
+
+function resizeCanvas() {
+    const canvas = gl.canvas;
+    const displayWidth = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
+
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+}
+
+function updateMousePosition(event) {
+    const canvas = gl.canvas;
+    const rect = canvas.getBoundingClientRect();
+    mousePosition.x = event.clientX - rect.left;
+    mousePosition.y = canvas.height - (event.clientY - rect.top);
 }
 
 function setupShader(fragmentShaderSource) {
@@ -60,6 +84,7 @@ function setupShader(fragmentShaderSource) {
     positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
     resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
     timeUniformLocation = gl.getUniformLocation(program, 'u_time');
+    mouseUniformLocation = gl.getUniformLocation(program, 'u_mouse');
 
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -101,7 +126,7 @@ function createProgram(gl, vertexShader, fragmentShader) {
 }
 
 function render() {
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    resizeCanvas();
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -112,6 +137,7 @@ function render() {
 
     gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
     gl.uniform1f(timeUniformLocation, (Date.now() - startTime) / 1000);
+    gl.uniform2f(mouseUniformLocation, mousePosition.x, mousePosition.y);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -119,7 +145,3 @@ function render() {
 }
 
 window.addEventListener('load', init);
-window.addEventListener('resize', () => {
-    gl.canvas.width = gl.canvas.clientWidth;
-    gl.canvas.height = gl.canvas.clientHeight;
-});
